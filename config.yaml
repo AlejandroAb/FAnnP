@@ -1,0 +1,186 @@
+################################################################################
+#                             CONFIGURATION FILE                               #
+#------------------------------------------------------------------------------#
+# Configuration file for FAnnP  - Functional Annotation Pipeline -             #
+# Set the parameters below, save the file and run Snakemake.                   #
+# The file format is yaml (http://www.yaml.org/) In this file, you specify your#
+# input bins, genomes or contigs to functional annotat. You can choose tools   #
+# and parameters according to your needs. Most rules and parameters have       #
+# default settings.                                                            #
+# It is very important to keep the indentation of the file (don’t change the   #
+# tabs and spaces), as well as the name of the parameters/variables. But you   #
+# can of course change the values of the parameters to deviate from the default#
+# settings. Any text after a hashtag (#) is considered a comment and will be   #
+# ignored by Snakemake.                                                        #
+#                                                                              #
+# @Company: NIOZ                                                               #
+# @Author: Alejandro Abdala                                                    #
+# @Co-authoring: Julia Engelmann, Nina Dombrowsky                              #
+# @Version: 1.1                                                                #
+# @Last update: 15/03/2020                                                     #
+################################################################################
+
+# Give a name to the RUN, do not use spaces. This will be the name of the directory
+# containing the output from this workflow. 
+RUN: ""
+
+# Full. path to the folder with the files (symbolic links are allowed) e. g. "/export/lv3/scratch/projects/bins/"
+bin_dir: ""
+
+# Name of the bins, genomes or fasta files to perform the functional annotation. This is the name of the file without the file extension.  
+# Enclose each element with double quotes and comma separated. e. g. ["bin1","bin2"]
+# If you have multipple files, you can use the script Scripts/list_Bins.sh suppling the path to your bins, its extension and the target config file
+# e.g Scripts/list_Bins.sh /export/lv3/scratch/projects/bins/ fasta config.yaml
+bin_list: [""]
+
+# File extension of the bins located at bin_dir and listed on bin_ext. e.g. "fna"
+bin_ext: "fna"
+
+# CDS identification, valid values are "PRODIGAL" or "PROKKA"
+GENE_CALLING: "PRODIGAL" 
+
+# IF GENE_CALLING = "PRODIGAL" fill the options bellow
+prodigal:
+ procedure: "meta"  # Select procedure (single or meta)
+ extra_params: ""   # prodigal -h to see more availabe options
+
+# IF GENE_CALLING = "PROKKA" fill the options bellow
+prokka: 
+ cpus: 15  # Number of CPUs
+ extra_params: " --mincontiglen 500" # prokka -h for more options 
+ increment: "1" # Locus tag counter increment
+
+# If you already have a defined taxonomy for the bins to be annotated, set 
+# add_taxonomy to "T",  supply the file with such taxonomy and this information 
+# will be included in the summarized output results, plus been able to use for 
+# further cleaning of the bins 
+bin_taxonomy:
+ add_taxonomy: "T"  # Add taxonomy T or F
+ taxonomy_file: ""  # Full path to the tab separated file with the bin/genome name (same as the one supplied at the bin_list) and its taxonomy
+ taxonomy_sep: ";"  # Character that separates the different taxonomy levels.
+ bin_col: "1"       # Column whith the bin/genome name.  [Def. "1" (Metagenomic pipeline summary file)] 
+ taxonomy_col: "17" # Column with the taxonomy. [Def. "17" (Metagenomic pipeline summary file)]
+
+# Clean metagenomic bins by inspecting its coverage, gc percentage and taxonomy classification
+bin_cleaning:
+ clean_bins: "T"          # Clean the bins, T or F
+ bin_coverage_gc_file: "" # Full path to the file with GC% and coverage information (Metagenomic pipeline summary file) 
+ bin_col: "1"             # Column whith the bin/genome name.  [Def. "1" (Metagenomic pipeline summary file)]
+ avg_depth_col: "23"      # Column whith the coverage depth data. [Def. "23" (Metagenomic pipeline summary file)]
+ avg_gc_col: "24"         # Column whith the GC% data.  [Def. "24" (Metagenomic pipeline summary file)]
+ contig_coverage_file: "" # Full path to the file with coverage information by contig. Output file from Metagenomic pipline: /binning/FinalBins/contig_coverage.txt
+ rules:
+  GC_max_diff: 0.1        # Maximum tolerated GC% difference between bin and contig. Values between 0 and 1. [Def. 0.1 (10%)] 
+  Coverage_ratio: 0.5     # Maximum tolerated ratio (Contig_avg_depth/Bin_avg_depth) difference between bin and contig.  (1-Coverage_ratio) > val < (1+Coverage_ratio). Values between 0 and 1. 
+  Contig_domain_identity: 50 # Minimun percentage of proteins from a contig assigned to the same domain as the bin/genome. Value between 0 and 100. [Def. 50] 
+
+################################################################################
+#####                     FUNCTIONAL ANNOTATION DATABASES                  #####
+################################################################################
+#                                                                              #
+# The name of the following sections/options is equivalent to the name of the  #
+# databases or feature to be annotated. In general, the name is followed by    #
+# the tool that is used for making such annotation (diamond, blast, hmmr). Set #
+# the option annotate: "T" or "F" in order to turn on/off such database        #
+# annotation. The concatenate_bins flag if set to "T" it will perform the      #
+# annotation for all the proteins from all the bins/genomes at once            #
+# (concatenating all of them in a single file); otherwise, it will perform     #
+# this operation individually for all the bins/genomes. This last scenario is  #
+# more useful when you have a lot of computational power, so then, you can     #
+# parallelize more  jobs, each one with its own number of CPUs.                #
+# Databases and mapping files are already supplied, so there is no need to     #
+# change these values.                                                         #
+################################################################################
+
+diamond:
+  db: "/export/data01/databases/ncbi_nr/diamond/nr.dmnd"
+  taxonmap: "/export/data01/databases/taxmapfiles/ncbi_nr/prot.accession2taxid.gz"  # this tsv file is the one that comes with NCBI (accession,accession.version,taxid,gi)
+  threads: "10"
+  evalue: "1e-5"
+  seq: "10"  #number of sequences to display
+  extra_params: "--sensitive --no-self-hits "
+  taxid_to_taxonomy: "/export/data01/databases/taxmapfiles/ncbi_nr/taxonomy5.txt"  #tsv file with tax_id,taxonomy
+
+cog_diamond:
+  annotate: "T"
+  db: "/export/data01/databases/cogs/diamond_db/prot2003-2014_short.dmnd"
+  taxonmap: "/export/data01/databases/taxmapfiles/ncbi_nr/prot.accession2taxid.gz"  # this tsv file is the one that comes with NCBI (accession,accession.version,taxid,gi)
+  threads: "15"
+  evalue: "1e-10"
+  seq: "100"  #number of sequences to display
+  extra_params: " --no-self-hits "
+  database_names: "/export/data01/databases/cogs/cog2003-2014_mapping4.csv" 
+  concatenate_bins: "F"
+
+ko_hmmr:
+  annotate: "T"
+  cpus: 7
+  evalue: "1e-5"
+  hmmr_database: "/export/data01/databases/ko/All_KO"
+  database_names: "/export/data01/databases/ko/ko_list_for_mapping"  #ask ND origin of this file
+  extra_params: "" 
+  concatenate_bins: "F"
+ 
+arCOG_hmmr:
+  annotate: "T"
+  cpus: 7
+  evalue: "1e-5"
+  hmmr_database: "/export/data01/databases/arCOG/arCOGs2019/All_Arcogs_2018.hmm"
+  database_names: "/export/data01/databases/arCOG/arCOGs2019/ar14.arCOGdef18.tab"
+  extra_params: ""
+  concatenate_bins: "F"
+
+pfam_hmmr:
+  annotate: "T"
+  cpus: 7
+  evalue: 1e-5 
+  hmmr_database: "/export/data01/databases/pfam/Pfam-A.hmm"
+  database_names: "/export/data01/databases/pfam/Pfam-A.clans.cleaned.tsv"
+  extra_params: ""
+  concatenate_bins: "F"
+
+tigr_hmmr:
+  annotate: "T"
+  cpus: 7
+  evalue: 1e-5
+  hmmr_database: "/export/data01/databases/tigr/TIGRFAMs_15.0_HMM.LIB"
+  database_names: "/export/data01/databases/tigr/TIGR_Info_clean2.txt"
+  extra_params: ""
+  concatenate_bins: "F"
+  
+cazy_hmmr:
+  annotate: "F"
+  cpus: 7
+  evalue: 1e-5
+  hmmr_database: "/export/data01/databases/cazy_spt/dbCAN-HMMdb-V7.txt"
+  database_names: "/export/data01/databases/cazy_spt/CAZY_mapping_2.txt"
+  extra_params: ""
+  concatenate_bins: "F"
+
+merops_blast:
+  annotate: "F"
+  threads: 7
+  evalue: 1e-20
+  blast_database: "/export/data01/databases/merops/merops_protease"
+  database_names: "/export/data01/databases/merops/Merops_Description2.txt"
+  extra_params: ""
+  concatenate_bins: "F"
+
+transporterDB_blast:
+  annotate: "F"
+  threads: 7
+  evalue: 1e-20
+  blast_database: "/export/data01/databases/tcdb/TransporterDB/tcdb_renamed_short"
+  database_names: "/export/data01/databases/tcdb/TransporterDB/TCDB_Desc_final.txt"
+  extra_params: ""
+  concatenate_bins: "F"
+  
+hydDB_blast:
+  annotate: "F"
+  threads: 7
+  evalue: 1e-20
+  blast_database: "/export/data01/databases/HydDB/HydDB_uniq"
+  database_names: "/export/data01/databases/HydDB/HydDB_mapping"
+  extra_params: ""
+  concatenate_bins: "F"
+
