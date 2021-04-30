@@ -16,8 +16,8 @@
 # @Company: NIOZ                                                               #
 # @Author: Alejandro Abdala                                                    #
 # @Co-authoring: Julia Engelmann, Nina Dombrowsky                              #
-# @Version: 1.1                                                                #
-# @Last update: 15/03/2020                                                     #
+# @Version: 1.2                                                                #
+# @Last update: 23/04/2021                                                     #
 ################################################################################
 
 # Give a name to the RUN, do not use spaces. This will be the name of the directory
@@ -25,6 +25,7 @@
 RUN: ""
 
 # Full. path to the folder with the files (symbolic links are allowed) e. g. "/export/lv3/scratch/projects/bins/"
+# Allways finish with a slash! "/"
 bin_dir: ""
 
 # Name of the bins, genomes or fasta files to perform the functional annotation. This is the name of the file without the file extension.  
@@ -36,12 +37,18 @@ bin_list: [""]
 # File extension of the bins located at bin_dir and listed on bin_ext. e.g. "fna"
 bin_ext: "fna"
 
+# Rename bins
+# This option will rename the contigs within each bin according to the name provided in the "bin_list" parameter.
+# If you are using bins resulting from Meta-Cascabel this option should be set to F; otherwise, we recommend 
+# setting this option to "T"  
+rename_bins: "T"
+
 # CDS identification, valid values are "PRODIGAL" or "PROKKA"
-GENE_CALLING: "PRODIGAL" 
+GENE_CALLING: "PROKKA" 
 
 # IF GENE_CALLING = "PRODIGAL" fill the options bellow
 prodigal:
- procedure: "meta"  # Select procedure (single or meta)
+ procedure: "single"  # Select procedure (single or meta)
  extra_params: ""   # prodigal -h to see more availabe options
 
 # IF GENE_CALLING = "PROKKA" fill the options bellow
@@ -55,24 +62,24 @@ prokka:
 # will be included in the summarized output results, plus been able to use for 
 # further cleaning of the bins 
 bin_taxonomy:
- add_taxonomy: "T"  # Add taxonomy T or F
- taxonomy_file: ""  # Full path to the tab separated file with the bin/genome name (same as the one supplied at the bin_list) and its taxonomy
+ add_taxonomy: "F"  # Add taxonomy T or F
+ taxonomy_file: "/export/lv3/scratch/workshop_2021/S12_Pipelines/bins/FinalBins.summary.tsv"  # Full path to the tab separated file with the bin/genome name (same as the one supplied at the bin_list) and its taxonomy
  taxonomy_sep: ";"  # Character that separates the different taxonomy levels.
  bin_col: "1"       # Column whith the bin/genome name.  [Def. "1" (Metagenomic pipeline summary file)] 
  taxonomy_col: "17" # Column with the taxonomy. [Def. "17" (Metagenomic pipeline summary file)]
 
 # Clean metagenomic bins by inspecting its coverage, gc percentage and taxonomy classification
 bin_cleaning:
- clean_bins: "T"          # Clean the bins, T or F
+ clean_bins: "F"          # Clean the bins, T or F
  bin_coverage_gc_file: "" # Full path to the file with GC% and coverage information (Metagenomic pipeline summary file) 
  bin_col: "1"             # Column whith the bin/genome name.  [Def. "1" (Metagenomic pipeline summary file)]
  avg_depth_col: "23"      # Column whith the coverage depth data. [Def. "23" (Metagenomic pipeline summary file)]
  avg_gc_col: "24"         # Column whith the GC% data.  [Def. "24" (Metagenomic pipeline summary file)]
  contig_coverage_file: "" # Full path to the file with coverage information by contig. Output file from Metagenomic pipline: /binning/FinalBins/contig_coverage.txt
  rules:
-  GC_max_diff: 0.1        # Maximum tolerated GC% difference between bin and contig. Values between 0 and 1. [Def. 0.1 (10%)] 
+  GC_max_diff: 20        # Maximum tolerated GC% difference between bin and contig. Values between 0 and 100. [Def. 10] 
   Coverage_ratio: 0.5     # Maximum tolerated ratio (Contig_avg_depth/Bin_avg_depth) difference between bin and contig.  (1-Coverage_ratio) > val < (1+Coverage_ratio). Values between 0 and 1. 
-  Contig_domain_identity: 50 # Minimun percentage of proteins from a contig assigned to the same domain as the bin/genome. Value between 0 and 100. [Def. 50] 
+  Contig_domain_identity: 25 # Minimun percentage of proteins from a contig assigned to the same domain as the bin/genome. Value between 0 and 100. [Def. 50] 
 
 ################################################################################
 #####                     FUNCTIONAL ANNOTATION DATABASES                  #####
@@ -95,7 +102,7 @@ bin_cleaning:
 diamond:
   db: "/export/data01/databases/ncbi_nr/diamond/nr.dmnd"
   taxonmap: "/export/data01/databases/taxmapfiles/ncbi_nr/prot.accession2taxid.gz"  # this tsv file is the one that comes with NCBI (accession,accession.version,taxid,gi)
-  threads: "10"
+  threads: "15"
   evalue: "1e-5"
   seq: "10"  #number of sequences to display
   extra_params: "--sensitive --no-self-hits "
@@ -105,43 +112,53 @@ cog_diamond:
   annotate: "T"
   db: "/export/data01/databases/cogs/diamond_db/prot2003-2014_short.dmnd"
   taxonmap: "/export/data01/databases/taxmapfiles/ncbi_nr/prot.accession2taxid.gz"  # this tsv file is the one that comes with NCBI (accession,accession.version,taxid,gi)
-  threads: "15"
+  threads: "10"
   evalue: "1e-10"
   seq: "100"  #number of sequences to display
   extra_params: " --no-self-hits "
   database_names: "/export/data01/databases/cogs/cog2003-2014_mapping4.csv" 
-  concatenate_bins: "F"
+  concatenate_bins: "T"
+
+cog_hmmr:
+  annotate: "T"
+  cpus: 15
+  evalue: "1e-5"
+  hmmr_database: "/export/data01/databases/cogs/hmms/NCBI_COGs_Oct2020.hmm"
+  database_names: "/export/data01/databases/cogs/hmms/cog_mapping.txt"
+  extra_params: ""
+  concatenate_bins: "T"
+
 
 ko_hmmr:
   annotate: "T"
-  cpus: 7
+  cpus: 10
   evalue: "1e-5"
   hmmr_database: "/export/data01/databases/ko/All_KO"
-  database_names: "/export/data01/databases/ko/ko_list_for_mapping"  #ask ND origin of this file
+  database_names: "/export/data01/databases/ko/ko_list"  
   extra_params: "" 
-  concatenate_bins: "F"
+  concatenate_bins: "T"
  
 arCOG_hmmr:
-  annotate: "T"
-  cpus: 7
+  annotate: "F"
+  cpus: 10
   evalue: "1e-5"
   hmmr_database: "/export/data01/databases/arCOG/arCOGs2019/All_Arcogs_2018.hmm"
   database_names: "/export/data01/databases/arCOG/arCOGs2019/ar14.arCOGdef18.tab"
   extra_params: ""
-  concatenate_bins: "F"
+  concatenate_bins: "T"
 
 pfam_hmmr:
   annotate: "T"
-  cpus: 7
+  cpus: 10
   evalue: 1e-5 
   hmmr_database: "/export/data01/databases/pfam/Pfam-A.hmm"
-  database_names: "/export/data01/databases/pfam/Pfam-A.clans.cleaned.tsv"
+  database_names: "/export/data01/databases/pfam/Pfam-A.cleaned.tsv"#"/export/data01/databases/pfam/Pfam-A.clans.cleaned.tsv"
   extra_params: ""
-  concatenate_bins: "F"
+  concatenate_bins: "T"
 
 tigr_hmmr:
   annotate: "T"
-  cpus: 7
+  cpus: 10
   evalue: 1e-5
   hmmr_database: "/export/data01/databases/tigr/TIGRFAMs_15.0_HMM.LIB"
   database_names: "/export/data01/databases/tigr/TIGR_Info_clean2.txt"
@@ -149,35 +166,35 @@ tigr_hmmr:
   concatenate_bins: "F"
   
 cazy_hmmr:
-  annotate: "F"
-  cpus: 7
+  annotate: "T"
+  cpus: 10
   evalue: 1e-5
-  hmmr_database: "/export/data01/databases/cazy_spt/dbCAN-HMMdb-V7.txt"
-  database_names: "/export/data01/databases/cazy_spt/CAZY_mapping_2.txt"
+  hmmr_database: "/export/data01/databases/cazy/dbCAN-HMMdb-V9.txt" #"/export/data01/databases/cazy_spt/dbCAN-HMMdb-V7.txt"
+  database_names: "/export/data01/databases/cazy/CAZyDB.07302020.fam-activities.txt" #"/export/data01/databases/cazy_spt/CAZY_mapping_2.txt"
   extra_params: ""
   concatenate_bins: "F"
 
 merops_blast:
-  annotate: "F"
-  threads: 7
+  annotate: "T"
+  threads: 10
   evalue: 1e-20
   blast_database: "/export/data01/databases/merops/merops_protease"
-  database_names: "/export/data01/databases/merops/Merops_Description2.txt"
+  database_names: "/export/data01/databases/merops/protease_description.txt"
   extra_params: ""
   concatenate_bins: "F"
 
 transporterDB_blast:
-  annotate: "F"
-  threads: 7
+  annotate: "T"
+  threads: 10
   evalue: 1e-20
-  blast_database: "/export/data01/databases/tcdb/TransporterDB/tcdb_renamed_short"
-  database_names: "/export/data01/databases/tcdb/TransporterDB/TCDB_Desc_final.txt"
+  blast_database: "/export/data01/databases/tcdb/tcdb"#"/export/data01/databases/tcdb/TransporterDB/tcdb_renamed_short"
+  database_names: "/export/data01/databases/tcdb/tcdb_definition.tsv"#"/export/data01/databases/tcdb/TransporterDB/TCDB_Desc_final.txt"
   extra_params: ""
   concatenate_bins: "F"
   
 hydDB_blast:
-  annotate: "F"
-  threads: 7
+  annotate: "T"
+  threads: 10
   evalue: 1e-20
   blast_database: "/export/data01/databases/HydDB/HydDB_uniq"
   database_names: "/export/data01/databases/HydDB/HydDB_mapping"

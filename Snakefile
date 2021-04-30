@@ -1,3 +1,11 @@
+"""
+FunctionalAnnotation Pipeline
+Version: 1.2
+Author: Alejandro Abdala, Julia Engelmann and Nina Dombrowski
+Last update: 23/04/2021
+"""
+
+
 run=config["RUN"]
 
 rule all:
@@ -16,7 +24,7 @@ if config["GENE_CALLING"] == "PRODIGAL":
         output:
             gbk=temp("{run}/prokka/{bin}/{bin}.gbk"),
             genes="{run}/prokka/{bin}/{bin}.ffn",
-            prots=temp("{run}/prokka/{bin}/{bin}.faa")
+            prots="{run}/prokka/{bin}/{bin}.faa"
         benchmark:
             "{run}/prokka/prodigal.benchmark"
         shell:
@@ -47,7 +55,7 @@ rule rename_bins:
         "{run}/prokka/renamed/{bin}.faa"
     shell:
         "awk -v run=\"{wildcards.run}\" -v bin=\"{wildcards.bin}\" '/>/{{sub(\">\",\"&\"FILENAME\"|\");sub(/\.faa/,x);sub(run\"/prokka/\"bin\"/\",x)}}1' {input} | "
-        "cut -f1 -d \" \" > {output}"
+        "cut -f1 -d \" \" > {output}" if config["rename_bins"] == "T" else "ln -s ../{wildcards.bin}/{wildcards.bin}.faa {output}"
 
 rule make_protein_list:
     input:
@@ -89,10 +97,12 @@ if config["GENE_CALLING"] == "PRODIGAL":
             map="{run}/prokka/{bin}/{bin}.seq2prots"
         output:
             temp("{run}/prokka/{bin}/Contig_Protein_list.txt")
+        params:
+            b="{bin}"
         shell:
             "zcat {input.gbk} | grep DEFINITION | cut -f3 -d\" \" | "
             "cut -f1-3 -d\";\" | sed 's/;/\\t/g ; s/seq.[a-z]*=//g ; s/\"//g' | "
-            "awk -F\"\\t\" 'NR==FNR{{contig[$1]=$3;len[$1]=$2;next}} BEGIN{{OFS=\"\\t\"}} {{print $1,contig[$1],len[$1],contig[$1]\"_\"$2,\"NA\"}}' "
+            "awk -F\"\\t\" -v bin=\"{params}\" 'NR==FNR{{contig[$1]=$3;len[$1]=$2;next}} BEGIN{{OFS=\"\\t\"}} {{print $1,bin,contig[$1],len[$1],contig[$1]\"_\"$2,\"NA\"}}' "
             "- {input.map} > {output}"
     rule concat_gbk_files_prodigal:
         input:
@@ -138,7 +148,9 @@ rule link_old_to_new_binIDS:
         idx="2" if config["GENE_CALLING"] == "PRODIGAL" else "1"
     shell:
         "awk -v idx={params.idx} 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}FNR==NR{{a[$1]=$0;next}}{{print $0,a[$idx]}}' {input.prokka} {input.prot} | "
-        "awk 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}{{print $1,$7,$2,$2,$3,$4,$5}}'  > {output}" 
+        "awk 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}{{print $1,$7,$2,$2,$3,$4,$5}}'  > {output}"
+        if config["GENE_CALLING"] == "PROKKA" else
+        "awk 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}{{print $1,$2,$3,$3,$4,$5,$6}}'  {input.prot} > {output}" 
 
 #add in extra column for contig nr
 rule add_contig_nr:
@@ -246,7 +258,9 @@ rule merge_contig_protein_info:
     output:#mark as temp
         "{run}/contig_mapping/gc_base_tmp"
     shell:
-        "awk 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}FNR==NR{{a[$1]=$0;next}}{{print $0,a[$1]}}' "
+        #"awk 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}FNR==NR{{a[$1]=$0;next}}{{print $0,a[$1]}}' "
+        "awk 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}FNR==NR{{if($1 ~ \"\\\\|\"){{ split($1,ks,\"\\\\|\"); key=ks[2] }}"
+        "else{{ key=$1 }};a[key]=$0;next}}{{ if($1 ~ \"\\\\|\"){{ split($1,ks2,\"\\\\|\"); key2=ks2[2] }}else{{ key2=$1 }};  print $0,a[key2]}}' "
         "{input.base} {input.merged} | awk 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}{{print $2,$1,$3,$4,$5,$6,$7,$8,$9,$12,$13,$10}}' "
         "> {output}"
 
@@ -286,7 +300,7 @@ rule merge_with_coverage:
 rule merge_with_contig_cov:
     input:
         "{run}/contig_mapping/gc_base_taxo_cov"
-    output:#mark as tmp
+    output: #mark as tmp
         "{run}/contig_mapping/gc_base_taxo_cov_2"
     shell:
         "cat " + config["bin_cleaning"]["contig_coverage_file"]+ " | "
@@ -315,7 +329,7 @@ if config["bin_cleaning"]["clean_bins"] == "T":
                 "{run}/contig_mapping/bin_clean_1"
             shell:
                 "cat {input} |  awk -F \"\\t\" 'function abs(v) {{return v < 0 ? -v : v}} "
-                "BEGIN{{OFS=\"\\t\"}} {{pass_gc=\"PASS\";pass_cvg=\"PASS\"; gc_diff=abs($11-$5); "  
+                "BEGIN{{OFS=\"\\t\"}} {{pass_gc=\"PASS\";pass_cvg=\"PASS\";if($11<=1){{gc1=$11*100}}else{{gc1=$11}}; if($5<=1){{gc2=$5*100}}else{{gc2=$5}}; gc_diff=abs(gc1-gc2); "  
                 "if(gc_diff>"+str(config["bin_cleaning"]["rules"]["GC_max_diff"])+"){{pass_gc=\"FAIL\"}}; "
                 "ab_ratio=$12/$4;if(ab_ratio<1-(" +str(config["bin_cleaning"]["rules"]["Coverage_ratio"])+ ") || "
                 "ab_ratio>1+("+str(config["bin_cleaning"]["rules"]["Coverage_ratio"])+")){{pass_cvg=\"FAIL\"}}; "
@@ -334,7 +348,7 @@ if config["bin_cleaning"]["clean_bins"] == "T":
                 "{run}/contig_mapping/bin_clean_tax1"
             shell:
                 "cat {input} | sed 's/d__//g' |  awk -F\"\\t\" 'BEGIN{{OFS=\"\\t\"}} "
-                "{{if(NR==1){{for(i=1;i<=NF;i++){{if($i==\"TaxString\"){{blastTax=i; }} }}" #Identify column with diamond/blast taxonomy, this can ve variable
+                "{{if(NR==1){{for(i=1;i<=NF;i++){{if($i==\"TaxString\"){{blastTax=i; }} }}" #Identify column with diamond/blast taxonomy, this can be variable
                 "}}else{{split($3,bin_tax,\";\");split($blastTax,prot_tax,\",\");" #split taxonomies 
                 "if(!bin[$2]){{bin[$2]=$2}};" #select uniq bins
                 "if(!contig[$7]){{contig[$7]=bin_tax[1];bin_contig[$2][$7]=$7}};"#select uniq contigs and link them to its taxonomy and to its bin
@@ -370,7 +384,7 @@ if config["bin_cleaning"]["clean_bins"] == "T":
                 "{run}/contig_mapping/bin_clean_tax3"
             shell:
                 "cat {input.passing_contigs} | cut -f2 | grep -F -v -w -f - {input.all_contigs} "
-                "| cut -f1,2 | sort | uniq > {output}"
+                "| cut -f1,2 | sort | uniq > {output} || true"
 
     rule clean_bins:
             """
@@ -422,7 +436,7 @@ rule diamond_prots:
         "diamond blastp -q {input} --evalue "+ str(config["diamond"]["evalue"]) + " --threads "+ str(config["diamond"]["threads"]) +" "  
         " --seq "+ str(config["diamond"]["seq"]) + " --db "+ str(config["diamond"]["db"]) + " --taxonmap "+ str(config["diamond"]["taxonmap"]) +" "
         "--outfmt 6 qseqid qtitle qlen sseqid salltitles slen qstart qend sstart send evalue bitscore length pident staxids "
-        "-o {output} " + str(config["diamond"]["extra_params"]) 
+        "-o {output} " + str(config["diamond"]["extra_params"])
 
 rule merge_diamond_results:
     input:
@@ -583,7 +597,7 @@ if config["ko_hmmr"]["annotate"] == "T":
         output:#mark as temp
             temp("{run}/kfam/kfam_names_tmp_2")
         shell:
-            "cat {input} | awk  -v OFS='\\t' '{{ if ($4 > $5){{ $7=\"high_score\" }}else{{ $7=\"-\" }} print }} ' > {output}"
+            "cat {input} | awk -F\"\\t\"  -v OFS='\\t' '{{ if ($4 > $5){{ $7=\"high_score\" }}else{{ $7=\"-\" }} print }} ' > {output}"
                
     rule add_header_ko_hmmr:
         input:
@@ -617,7 +631,7 @@ if config["arCOG_hmmr"]["annotate"] == "T":
         shell:
             "cat {input} |  awk '$0 !~ \"^#\" {{print $0}}'  | "
             "perl -lane 'print join \"\t\",@F[0..17],join \" \",@F[18..$#F]' | "
-            " sort -t$'\\t' -k6,6gr  | sort -t$'\\t' --stable -u -k1,1 | sort -t$'\\t' -k6,6gr > {output}"
+            " sort -t$'\\t' -k6,6gr  | sort -t$'\\t' --stable -u -k1,1 | sort -t$'\\t' -k6,6gr  |  cut -f1,3,5,6  > {output}"
      
     rule concat_arCOG_hmmr:
         input:
@@ -702,6 +716,117 @@ if config["arCOG_hmmr"]["annotate"] == "T":
     #        "{run}/arCOG/arCOG.{bin}.benchmark"
         shell:
             "awk 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}FNR==NR{{a[$1]=$0;next}}{{print $0,a[$1]}}' {input.arc} {input.map} > {output}"  
+
+if config["cog_hmmr"]["annotate"] == "T":
+    rule cog_hmmr:
+        input:
+            "{run}/prokka/All_bins.faa" if config["cog_hmmr"]["concatenate_bins"] == "T" else
+            "{run}/prokka/renamed/{bin}.faa"
+        output:
+            "{run}/cog/All_bins_cog.out.tmp" if config["cog_hmmr"]["concatenate_bins"] == "T" else
+            "{run}/cog/{bin}.out"
+        benchmark:
+            "{run}/cog/cog.All_bins.benchmark"  if config["cog_hmmr"]["concatenate_bins"] == "T" else
+            "{run}/cog/cog.{bin}.benchmark"
+        shell:
+            "hmmsearch --tblout  /dev/stdout -o  /dev/null --cpu "+ str(config["cog_hmmr"]["cpus"]) +" --notextw "+ str(config["cog_hmmr"]["extra_params"])+" "
+            " -E " +str(config["cog_hmmr"]["evalue"]) + " " + str(config["cog_hmmr"]["hmmr_database"]) + " {input}  "
+            " > {output}"
+    rule select_best_cog_hmmr:
+        input:
+            "{run}/cog/{bin}.out"
+        output:
+            "{run}/cog/{bin}.unq.out"
+        shell:
+            "cat {input} |  awk '$0 !~ \"^#\" {{print $0}}'  | "
+            "perl -lane 'print join \"\t\",@F[0..17],join \" \",@F[18..$#F]' | "
+            " sort -t$'\\t' -k6,6gr  | sort -t$'\\t' --stable -u -k1,1 | sort -t$'\\t' -k6,6gr  |  cut -f1,3,5,6 > {output}"
+
+    rule concat_cog_hmmr:
+        input:
+            expand("{run}/cog/{bin}.unq.out",  bin=config["bin_list"], run=run)
+        output:
+            "{run}/cog/All_bins_cog.out"
+        shell:
+            "cat {input} > {output}"
+
+
+    rule select_best_cog_hmmr_all:
+        input:
+            "{run}/cog/All_bins_cog.out.tmp"
+        output:
+            "{run}/cog/All_bins_cog.out"
+        shell:
+            "cat {input} |   awk '$0 !~ \"^#\" {{print $0}}' | "
+            "perl -lane 'print join \"\\t\",@F[0..17],join \" \",@F[18..$#F]' |  "
+            "sort -t$'\\t' -k6,6gr  | sort -t$'\\t' --stable -u -k1,1  | "
+            "sort -t$'\\t' -k6,6gr |  cut -f1,3,5,6  > {output}"
+
+
+    rule format_cog_hmmr:
+        input:
+            "{run}/cog/All_bins_cog.out"
+        output:#mark as temp
+            "{run}/cog/cog_tmp"
+    #    benchmark:
+    #        "{run}/cog/cog.All_bins.benchmark"  if config["concatenate_bins"] == "T" else
+    #        "{run}/cog/cog.{bin}.benchmark"
+        shell:
+            "cat {input} | awk  -v OFS='\\t' '{{split($2,a,\".\"); print $1, a[1], $3,$4}}' | "
+            "LC_ALL=C sort > {output}"
+
+    rule merge_cog_hmmr:
+        input:
+            arc="{run}/cog/cog_tmp",
+            prots="{run}/contig_mapping/1_Bins_to_protein_list.txt"
+        output:#mark as temp
+            "{run}/cog/cog_merged"
+        shell:
+            "LC_ALL=C join -a1 -j1 -e'-' -t $'\\t' -o 0,2.2,2.3 "
+            "<(LC_ALL=C sort {input.prots}) "
+            "<(LC_ALL=C sort {input.arc}) | LC_ALL=C sort  > {output}"
+
+#    rule rm_cog_def_spaces:
+#        output:
+#            temp("{run}/cog/cog_names.tsv")
+#        shell:
+#            "cat " + str(config["cog_hmmr"]["database_names"])+" | sed 's/ /_/g' > {output}"
+
+    rule add_names_cog_hmmr:
+        input:
+            arc="{run}/cog/cog_merged"
+#            db="{run}/cog/cog_names.tsv"
+        output:#mark as temp
+            temp("{run}/cog/cogs_names_tmp")
+        shell:
+            "LC_ALL=C join -a1 -1 2 -2 1 -e'-' -t $'\\t' -o1.1,0,2.3,2.2,2.5,1.3 "
+            "<(LC_ALL=C sort -k2 {input.arc}) "
+            "<(LC_ALL=C sort -k1 "+ str(config["cog_hmmr"]["database_names"])+") | LC_ALL=C  sort > {output}"
+
+    rule add_header_cog_hmmr:
+        input:
+            "{run}/cog/cogs_names_tmp"
+        output:
+            "{run}/cog/cogs_map.tsv"
+        shell:
+    #add in headers
+            "echo -e \"accession\\tNCBI_COG\\tNCBI_COG_Description\\tCOG_PathwayID\\tCOG_Pathway\\tNCBI_COG_evalue\" | "
+            "cat - {input} > {output}"
+    rule merge_cog_hmmr_results:
+#    """
+#    deprecated, now we map everything together from "{run}/cog/cogs_map.tsv"
+#    """
+        input:
+            arc="{run}/cog/cogs_map.tsv",
+            map="{run}/contig_mapping/Diamond_map_tmp.tsv"
+        output:#mark as temp
+            "{run}/contig_mapping/cogs_map_tmp.tsv"
+    #    benchmark:
+    #        "{run}/cog/cog.All_bins.benchmark"  if config["concatenate_bins"] == "T" else
+    #        "{run}/cog/cog.{bin}.benchmark"
+        shell:
+            "awk 'BEGIN{{FS=\"\\t\";OFS=\"\\t\"}}FNR==NR{{a[$1]=$0;next}}{{print $0,a[$1]}}' {input.arc} {input.map} > {output}"
+
 
 if config["cog_diamond"]["annotate"] == "T":
      rule cog_diamond:
@@ -900,7 +1025,7 @@ if config["tigr_hmmr"]["annotate"] == "T":
         output:
             "{run}/tigr/All_bins_tigr.out"
         shell:
-            "cat {input} |  cut  -f1,3,5,6  > {output}"
+            "cat {input} |  cut  -f1,4,5,6  > {output}"
 
     rule select_best_tigr_hmmr_all:
         input:
@@ -911,7 +1036,7 @@ if config["tigr_hmmr"]["annotate"] == "T":
             "cat {input} |   awk '$0 !~ \"^#\" {{print $0}}' | "
             "perl -lane 'print join \"\\t\",@F[0..17],join \" \",@F[18..$#F]' |  "
             "sort -t$'\\t' -k6,6gr  | sort -t$'\\t' --stable -u -k1,1  | "
-            "sort -t$'\\t' -k6,6gr |  cut -f1,3,5,6  > {output}"
+            "sort -t$'\\t' -k6,6gr |  cut -f1,4,5,6  > {output}"
     rule merge_tigr_hmmr:
         input:
             tigr="{run}/tigr/All_bins_tigr.out",
@@ -932,7 +1057,7 @@ if config["tigr_hmmr"]["annotate"] == "T":
         output:#mark as temp
             "{run}/tigr/tigr_names_tmp"
         shell:
-            "LC_ALL=C join -a1 -1 2 -2 1 -e'-' -t $'\\t' -o1.1,1.2,2.2,2.3,2.4,1.3,1.4 "
+            "LC_ALL=C join -a1 -1 2 -2 1 -e'-' -t $'\\t' -o1.1,1.2,2.2,2.3,2.4,2.5,1.3,1.4 "
             "<(LC_ALL=C sort -k2 {input.tigr}) "
             "<(LC_ALL=C sort -k1 "+str(config["tigr_hmmr"]["database_names"])+") | LC_ALL=C  sort > {output}"
  #    rule identify_high_confidence_tigr_hmmr:
@@ -949,7 +1074,7 @@ if config["tigr_hmmr"]["annotate"] == "T":
         output:
             "{run}/tigr/tigr_map.tsv"
         shell:
-            "echo -e \"accession\\tTIGR_hmm\\tTIGR_name\\tTIGR_description\\tTIGR_EC\\tTIGR_Evalue\\tTIGR_Score\" | "
+            "echo -e \"accession\\tTIGR_hmm\\tTIGR_name\\tTIGR_description\\tTIGR_EC\\tTIGR_gene\\tTIGR_Evalue\\tTIGR_Score\" | "
             "cat - {input} > {output}"
 
 
@@ -1014,9 +1139,11 @@ if config["cazy_hmmr"]["annotate"] == "T":
         output:#mark as temp
             "{run}/cazy/cazy_names_tmp"
         shell:
-            "LC_ALL=C join -a1 -1 2 -2 1 -e'-' -t $'\\t' -o1.1,1.2,2.2,1.3,1.4 "
-            "<(LC_ALL=C sort -k2 {input.cazy}) "
-            "<(LC_ALL=C sort -k1 "+str(config["cazy_hmmr"]["database_names"])+") | LC_ALL=C  sort > {output}"
+           # "LC_ALL=C join -a1 -1 2 -2 1 -e'-' -t $'\\t' -o1.1,1.2,2.2,1.3,1.4 "
+           # "<(LC_ALL=C sort -k2 {input.cazy}) "
+           # "<(LC_ALL=C sort -k1 "+str(config["cazy_hmmr"]["database_names"])+") | LC_ALL=C  sort > {output}"
+            "cat "+str(config["cazy_hmmr"]["database_names"])+" | awk -F\"\\t\" 'NR==FNR{{h[$1]=$2;next}}BEGIN{{OFS=\"\\t\"}}"
+            "{{split($2,acc,\"_\");gsub(\"^  \",\"\",h[acc[1]]);print $1,$2,h[acc[1]],$3,$4}}' - {input.cazy} > {output}"
  #    rule identify_high_confidence_cazy_hmmr:
  #       input:
  #           "{run}/cazy/cazy_names_tmp"
@@ -1131,7 +1258,7 @@ if config["transporterDB_blast"]["annotate"] == "T":
         output:
             "{run}/transporter/All_bins_transporter.out"
         shell:
-            "cat {input} | awk -F'\\t' -v OFS='\\t' '{{split($2,a,\"|\"); print $1, a[1], a[2], $11}}' "
+            "cat {input} | awk -F'\\t' -v OFS='\\t' '{{ print $1, $2, $11}}' "
             "| LC_ALL=C sort > {output}"
      rule concat_transporter_blast_all:
         input:
@@ -1139,7 +1266,7 @@ if config["transporterDB_blast"]["annotate"] == "T":
         output:
             "{run}/transporter/All_bins_transporter.out"
         shell:
-            "cat {input} | awk -F'\\t' -v OFS='\\t' '{{split($2,a,\"|\"); print $1, a[1], a[2], $11}}' "
+            "cat {input} | awk -F'\\t' -v OFS='\\t' '{{ print $1, $2, $11}}' "
             "| LC_ALL=C sort > {output}"
             
      rule merge_transporter_blast:
@@ -1149,7 +1276,7 @@ if config["transporterDB_blast"]["annotate"] == "T":
         output:#mark as temp
             "{run}/transporter/transporter_merged"
         shell:
-            "LC_ALL=C join -a1 -j1 -e'-' -t $'\\t' -o 0,2.3,2.4 "
+            "LC_ALL=C join -a1 -j1 -e'-' -t $'\\t' -o 0,2.2,2.3 "
             "<(LC_ALL=C sort {input.prots}) "
             "<(LC_ALL=C sort {input.transporter}) | LC_ALL=C sort  "
             #get rid of empty space this was in the past the -e "-" was missing and now it makes the trick
@@ -1162,9 +1289,9 @@ if config["transporterDB_blast"]["annotate"] == "T":
         output:#mark as temp
             "{run}/transporter/transporter_names_tmp"
         shell:
-            "LC_ALL=C join -a1 -1 2 -2 2 -e'-' -t $'\\t' -o1.1,0,2.1,2.3,1.3 "
+            "LC_ALL=C join -a1 -1 2 -2 1 -e'-' -t $'\\t' -o 1.1,1.2,2.2,2.3,1.3 "
             "<(LC_ALL=C sort -k2 {input.transporter}) "
-            "<(LC_ALL=C sort -k2 "+str(config["transporterDB_blast"]["database_names"])+") | LC_ALL=C  sort > {output}"
+            "<(LC_ALL=C sort -k1 "+str(config["transporterDB_blast"]["database_names"])+") | LC_ALL=C  sort > {output}"
 
      rule add_header_transporter_blast:
         input:
@@ -1251,6 +1378,7 @@ rule summarize_annotation:
         "{run}/tigr/tigr_map.tsv" if config["tigr_hmmr"]["annotate"] == "T"  else "{run}/contig_mapping/B_GenomeInfo.txt",
         "{run}/cazy/cazy_map.tsv" if config["cazy_hmmr"]["annotate"] == "T"  else "{run}/contig_mapping/B_GenomeInfo.txt",
         "{run}/cog_diamond/cog_map.tsv" if config["cog_diamond"]["annotate"] == "T"  else "{run}/contig_mapping/B_GenomeInfo.txt",
+        "{run}/cog/cogs_map.tsv" if config["cog_hmmr"]["annotate"] == "T" else "{run}/contig_mapping/B_GenomeInfo.txt",
         "{run}/merops/merops_map.tsv" if config["merops_blast"]["annotate"] == "T"  else "{run}/contig_mapping/B_GenomeInfo.txt",
         "{run}/transporter/transporter_map.tsv" if config["transporterDB_blast"]["annotate"] == "T"  else "{run}/contig_mapping/B_GenomeInfo.txt",
         "{run}/hydDB/hydDB_map.tsv" if config["hydDB_blast"]["annotate"] == "T"  else "{run}/contig_mapping/B_GenomeInfo.txt"

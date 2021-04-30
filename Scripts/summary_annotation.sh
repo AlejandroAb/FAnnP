@@ -14,12 +14,54 @@ fi
 
 cp $2 $3
 for file in $1/*/*_map.tsv; do
-  cat $file | awk -F "\t" 'NR==FNR{if(NR==1){header=$2; for(i=3;i<=NF;i++){header=header"\t"$i} ; br="-"; \
-              for(i=2;i<=NF;i++){br=br"\t-"}} else{row=$2; for(i=3;i<=NF;i++){row=row"\t"$i}; r[$1]=row};next} \
-              {if(FNR==1){print $0"\t"header}else{if(r[$1]){print $0"\t"r[$1]}else{print $0"\t"br}}}' \
-   - $3 > $3.tmp
+  cat $file | awk -F "\t" 'NR==FNR{if(NR==1){
+                                      header=$2; 
+                                      for(i=3;i<=NF;i++){
+                                          header=header"\t"$i
+                                      }; 
+                                      br="-"; 
+                                      for(i=2;i<=NF;i++){
+                                          br=br"\t-"
+                                      }
+                                  }else{
+                                      row=$2; 
+                                      for(i=3;i<=NF;i++){
+                                          row=row"\t"$i
+                                      }; 
+                                      if($1 ~ "\\|"){
+                                          split($1,ks,"\\|");
+                                          key=ks[2];
+                                      }else{
+                                          key=$1
+                                      };
+                                      r[key]=row
+                                  }
+                                   ;next
+                                  } 
+                                  {if(FNR==1){
+                                      print $0"\t"header
+                                   }else{
+                                      if($1 ~ "\\|"){
+                                         split($1,ks2,"\\|");
+                                         key2=ks2[2];
+                                      }else{
+                                         key2=$1;
+                                      };
+                                      if(r[key2]){
+                                         print $0"\t"r[key2];
+                                      }else{
+                                        print $0"\t"br;
+                                      }
+                                   }}'  - $3 > $3.tmp
  mv $3.tmp  $3
 done
 
 exit 0
 
+#cat TestCOG/cog/cogs_map.tsv |  
+#awk -F "\t" 'NR==FNR{if(NR==1){header=$2; for(i=3;i<=NF;i++){header=header"\t"$i} ; br="-"; 
+#for(i=3;i<=NF;i++){br=br"\t-"}} else{row=$2; for(i=3;i<=NF;i++){row=row"\t"$i};
+#if($1 ~ "\\|"){split($1,ks,"|");key=ks[2];}else{key=$1}; r[key]=row;}next} 
+#{if(FNR==1){print $0"\t"header}else{if($1 ~ "\\|"){split($1,ks2,"|");key2=ks2[2]}else{key2=$1};if(r[key2]){print $0"\t"r[key2]}else{print $0"\t"br}}}' - TestCOG/contig_mapping/B_GenomeInfo.txt 
+
+#cat TestCOG/cog/cogs_map.tsv |  awk -F "\t" 'NR==FNR{if(NR==1){header=$2; for(i=3;i<=NF;i++){header=header"\t"$i} ; br="-"; for(i=3;i<=NF;i++){br=br"\t-"}} else{row=$2; for(i=3;i<=NF;i++){row=row"\t"$i};if($1 ~ "\\|"){split($1,ks,"\\|");key=ks[2];}else{key=$1}; r[key]=row;}next} {if(FNR==1){print $0"\t"header}else{if($1 ~ "\\|"){split($1,ks2,"\\|");key2=ks2[2]}else{key2=$1};if(r[key2]){print $0"\t"r[key2]}else{print $0"\t"br}}}' - TestCOG/contig_mapping/B_GenomeInfo.txt
