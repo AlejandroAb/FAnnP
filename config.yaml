@@ -15,26 +15,26 @@
 #                                                                              #
 # @Company: NIOZ                                                               #
 # @Author: Alejandro Abdala                                                    #
-# @Co-authoring: Julia Engelmann, Nina Dombrowsky                              #
-# @Version: 1.2                                                                #
-# @Last update: 23/04/2021                                                     #
+# @Co-authoring: Julia Engelmann, Nina Dombrowsky, Tijn Tensen                 #
+# @Version: 2.0                                                                #
+# @Last update: --/05/2025                                                     #
 ################################################################################
 
-# Give a name to the RUN, do not use spaces. This will be the name of the directory
-# containing the output from this workflow. 
+# Give a name to the RUN, do not use spaces. This will be the name of the directory. e.g. /export/lv5/scratch/your_project_output
+# containing the output from this workflow.
 RUN: ""
 
-# Full. path to the folder with the files (symbolic links are allowed) e. g. "/export/lv3/scratch/projects/bins/"
+# Full path to the folder with the files (symbolic links are allowed). e.g. "/export/lv3/scratch/projects/bins/"
 # Allways finish with a slash! "/"
 bin_dir: ""
 
 # Name of the bins, genomes or fasta files to perform the functional annotation. This is the name of the file without the file extension.  
-# Enclose each element with double quotes and comma separated. e. g. ["bin1","bin2"]
-# If you have multipple files, you can use the script Scripts/list_Bins.sh suppling the path to your bins, its extension and the target config file
+# Enclose each element with double quotes and comma separated. e.g. ["bin1", "bin2"]
+# If you have multipple files, you can use the script Scripts/list_Bins.sh suppling the path to your bins, its extension and the target config file.
 # e.g Scripts/list_Bins.sh /export/lv3/scratch/projects/bins/ fasta config.yaml
 bin_list: [""]
 
-# File extension of the bins located at bin_dir and listed on bin_ext. e.g. "fna"
+# File extension of the bins located at bin_dir and listed on bin_ext. e.g. "fna", "fasta", or "faa"
 bin_ext: "fna"
 
 # Rename bins
@@ -43,43 +43,69 @@ bin_ext: "fna"
 # setting this option to "T"  
 rename_bins: "T"
 
-# CDS identification, valid values are "PRODIGAL" or "PROKKA"
-GENE_CALLING: "PROKKA" 
+# CDS identification, valid values are "PRODIGAL" or "SKIP" 
+# SKIP will skip gene calling steps, uses faa format as input for pipeline.
+GENE_CALLING: "PRODIGAL" 
+
+#Output includes GFF file, set this flag to T in order to include the sequence within the file
+ADD_SEQ_TO_GFF: "T"
+
+# If we will store our annotations the mysql fannp database or not.
+generate_sql_database: "T"
+# For storing the annotations into the mysql fannp database.
+mysql_username: "faanp_user"
+mysql_password: "FaanP2025!"
+mysql_host: "localhost"  # localhost
+# MySQL database name.
+mysql_database: "fannp"
+# Load data into MySQL from this location.
+mysql_loadmap: ""  # the map you can load in files to MySQL
+
+# If you ran meta_cascabel and where its output locations are.
+meta_cascabel: 
+  annotate: "F"
+  location_final_bins: ""  # e.g. map/FinalBins.summary.tsv
+  contig_coverage: ""  # e.g. map/contig_coverage.txt
+
+# If you have a bin metadata file available.
+meta_data:
+  annotate: "F"
+  bin_meta_data: ""  # e.g. map/metadata_example.tsv
 
 # IF GENE_CALLING = "PRODIGAL" fill the options bellow
 prodigal:
- procedure: "single"  # Select procedure (single or meta)
- extra_params: ""   # prodigal -h to see more availabe options
+  procedure: "single"  # Select procedure (single or meta)
+  extra_params: ""   # prodigal -h to see more availabe options
 
 # IF GENE_CALLING = "PROKKA" fill the options bellow
 prokka: 
- cpus: 15  # Number of CPUs
- extra_params: " --mincontiglen 500" # prokka -h for more options 
- increment: "1" # Locus tag counter increment
+  cpus: 15  # Number of CPUs
+  extra_params: " --mincontiglen 500" # prokka -h for more options 
+  increment: "1" # Locus tag counter increment
 
 # If you already have a defined taxonomy for the bins to be annotated, set 
 # add_taxonomy to "T",  supply the file with such taxonomy and this information 
 # will be included in the summarized output results, plus been able to use for 
 # further cleaning of the bins 
 bin_taxonomy:
- add_taxonomy: "F"  # Add taxonomy T or F
- taxonomy_file: "/export/lv3/scratch/workshop_2021/S12_Pipelines/bins/FinalBins.summary.tsv"  # Full path to the tab separated file with the bin/genome name (same as the one supplied at the bin_list) and its taxonomy
- taxonomy_sep: ";"  # Character that separates the different taxonomy levels.
- bin_col: "1"       # Column whith the bin/genome name.  [Def. "1" (Metagenomic pipeline summary file)] 
- taxonomy_col: "17" # Column with the taxonomy. [Def. "17" (Metagenomic pipeline summary file)]
+  add_taxonomy: "F"  # Add taxonomy T or F
+  taxonomy_file: ""  # Full path to the tab separated file with the bin/genome name (same as the one supplied at the bin_list) and its taxonomy
+  taxonomy_sep: ";"  # Character that separates the different taxonomy levels.
+  bin_col: "1"       # Column whith the bin/genome name.  [Def. "1" (Metagenomic pipeline summary file)] 
+  taxonomy_col: "17" # Column with the taxonomy. [Def. "17" (Metagenomic pipeline summary file)]
 
 # Clean metagenomic bins by inspecting its coverage, gc percentage and taxonomy classification
 bin_cleaning:
- clean_bins: "F"          # Clean the bins, T or F
- bin_coverage_gc_file: "" # Full path to the file with GC% and coverage information (Metagenomic pipeline summary file) 
- bin_col: "1"             # Column whith the bin/genome name.  [Def. "1" (Metagenomic pipeline summary file)]
- avg_depth_col: "23"      # Column whith the coverage depth data. [Def. "23" (Metagenomic pipeline summary file)]
- avg_gc_col: "24"         # Column whith the GC% data.  [Def. "24" (Metagenomic pipeline summary file)]
- contig_coverage_file: "" # Full path to the file with coverage information by contig. Output file from Metagenomic pipline: /binning/FinalBins/contig_coverage.txt
- rules:
-  GC_max_diff: 20        # Maximum tolerated GC% difference between bin and contig. Values between 0 and 100. [Def. 10] 
-  Coverage_ratio: 0.5     # Maximum tolerated ratio (Contig_avg_depth/Bin_avg_depth) difference between bin and contig.  (1-Coverage_ratio) > val < (1+Coverage_ratio). Values between 0 and 1. 
-  Contig_domain_identity: 25 # Minimun percentage of proteins from a contig assigned to the same domain as the bin/genome. Value between 0 and 100. [Def. 50] 
+  clean_bins: "F"          # Clean the bins, T or F
+  bin_coverage_gc_file: "" # Full path to the file with GC% and coverage information (Metagenomic pipeline summary file) 
+  bin_col: "1"             # Column whith the bin/genome name.  [Def. "1" (Metagenomic pipeline summary file)]
+  avg_depth_col: "23"      # Column whith the coverage depth data. [Def. "23" (Metagenomic pipeline summary file)]
+  avg_gc_col: "24"         # Column whith the GC% data.  [Def. "24" (Metagenomic pipeline summary file)]
+  contig_coverage_file: "" # Full path to the file with coverage information by contig. Output file from Metagenomic pipline: /binning/FinalBins/contig_coverage.txt
+  rules:
+    GC_max_diff: 20        # Maximum tolerated GC% difference between bin and contig. Values between 0 and 100. [Def. 10] 
+    Coverage_ratio: 0.5     # Maximum tolerated ratio (Contig_avg_depth/Bin_avg_depth) difference between bin and contig.  (1-Coverage_ratio) > val < (1+Coverage_ratio). Values between 0 and 1. 
+    Contig_domain_identity: 25 # Minimun percentage of proteins from a contig assigned to the same domain as the bin/genome. Value between 0 and 100. [Def. 50] 
 
 ################################################################################
 #####                     FUNCTIONAL ANNOTATION DATABASES                  #####
@@ -100,104 +126,214 @@ bin_cleaning:
 ################################################################################
 
 diamond:
-  db: "/export/data01/databases/ncbi_nr/diamond/nr.dmnd"
-  taxonmap: "/export/data01/databases/taxmapfiles/ncbi_nr/prot.accession2taxid.gz"  # this tsv file is the one that comes with NCBI (accession,accession.version,taxid,gi)
+  db: "nr.dmnd"
+  taxonmap: "prot.accession2taxid.gz"  # this tsv file is the one that comes with NCBI (accession,accession.version,taxid,gi)
   threads: "15"
   evalue: "1e-5"
   seq: "10"  #number of sequences to display
-  extra_params: "--sensitive --no-self-hits "
-  taxid_to_taxonomy: "/export/data01/databases/taxmapfiles/ncbi_nr/taxonomy5.txt"  #tsv file with tax_id,taxonomy
-
-cog_diamond:
-  annotate: "T"
-  db: "/export/data01/databases/cogs/diamond_db/prot2003-2014_short.dmnd"
-  taxonmap: "/export/data01/databases/taxmapfiles/ncbi_nr/prot.accession2taxid.gz"  # this tsv file is the one that comes with NCBI (accession,accession.version,taxid,gi)
-  threads: "10"
-  evalue: "1e-10"
-  seq: "100"  #number of sequences to display
-  extra_params: " --no-self-hits "
-  database_names: "/export/data01/databases/cogs/cog2003-2014_mapping4.csv" 
-  concatenate_bins: "T"
+  extra_params: "--sensitive --no-self-hits -b 8 -c 1 "
+  taxid_to_taxonomy: "taxonomy_8_levels.txt"  #tsv file with tax_id,taxonomy
+  database_name: "NCBI NR"
+  database_version: "2024-01"
+  database_description: ""
 
 cog_hmmr:
   annotate: "T"
+  hmmr_tool: "hmmsearch" #hmmsearch or hmmscan
   cpus: 15
   evalue: "1e-5"
-  hmmr_database: "/export/data01/databases/cogs/hmms/NCBI_COGs_Oct2020.hmm"
-  database_names: "/export/data01/databases/cogs/hmms/cog_mapping.txt"
+  max_domain_overlap: 25 #percentage overlap allow from smallest domain
+  evalue_domain_cutoff: "1e-4" #cutoff domains with bad independent evalue
+  domain_col: 4 #the column the domain is name located at (-1)
+  database: "NCBI_COG_2024_untrimmed.hmm"
+  database_names: "cog-24.def.tab"
   extra_params: ""
   concatenate_bins: "T"
-
+  database_name: "COG: Cluster of Orthologous Genes"
+  database_version: "2020"
+  database_description: "Cluster of Orthologous Genes"
 
 ko_hmmr:
   annotate: "T"
+  hmmr_tool: "hmmsearch" #hmmsearch or hmmscan
   cpus: 10
   evalue: "1e-5"
-  hmmr_database: "/export/data01/databases/ko/All_KO"
-  database_names: "/export/data01/databases/ko/ko_list"  
+  max_domain_overlap: 25 #percentage overlap allow from smallest domain
+  evalue_domain_cutoff: "1e-4" #cutoff domains with bad independent evalue
+  domain_col: 4 #the column the domain name is located at (-1)
+  database: "All_KO_r109"
+  database_names: "ko_list_for_mapping"  
   extra_params: "" 
   concatenate_bins: "T"
- 
+  database_name: "KofamKOALA: KEGG Orthology And Links Annotation"
+  database_version: "2024-12-02"
+  database_description: "Database containing a manually curated large collection of protein families."
+
 arCOG_hmmr:
   annotate: "F"
+  hmmr_tool: "hmmsearch" #hmmsearch or hmmscan
   cpus: 10
   evalue: "1e-5"
-  hmmr_database: "/export/data01/databases/arCOG/arCOGs2019/All_Arcogs_2018.hmm"
-  database_names: "/export/data01/databases/arCOG/arCOGs2019/ar14.arCOGdef18.tab"
+  max_domain_overlap: 25 #percentage overlap allow from smallest domain
+  evalue_domain_cutoff: "1e-4" #cutoff domains with bad independent evalue
+  domain_col: 4 #the column the domain name is located at (-1)
+  database: "All_Arcogs_2018.hmm"
+  database_names: "ar14.arCOGdef18.tab"
   extra_params: ""
   concatenate_bins: "T"
+  database_name: "arCOG: Archaeal Clusters of Orthologous Genes"
+  database_version: "2018"
+  database_description: "Database for analysis of shared features between Thermococcales, Methanococcales and Methanobacteriales."
 
 pfam_hmmr:
   annotate: "T"
+  hmmr_tool: "hmmscan" #hmmsearch or hmmscan
   cpus: 10
   evalue: 1e-5 
-  hmmr_database: "/export/data01/databases/pfam/Pfam-A.hmm"
-  database_names: "/export/data01/databases/pfam/Pfam-A.cleaned.tsv"#"/export/data01/databases/pfam/Pfam-A.clans.cleaned.tsv"
+  max_domain_overlap: 25 #percentage overlap allow from smallest domain
+  evalue_domain_cutoff: "1e-4" #cutoff domains with bad independent evalue
+  domain_col: 4 #the column the domain name is located at (-1)
+  database: "Pfam-A.hmm"
+  database_names: "Pfam-A.clans.tsv"
   extra_params: ""
   concatenate_bins: "T"
+  database_name: "Pfam: Protein Families"
+  database_version: "2021"
+  database_description: "Database containing a large collection of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs)."
 
 tigr_hmmr:
-  annotate: "T"
+  annotate: "F"
+  hmmr_tool: "hmmsearch" #hmmsearch or hmmscan
   cpus: 10
   evalue: 1e-5
-  hmmr_database: "/export/data01/databases/tigr/TIGRFAMs_15.0_HMM.LIB"
-  database_names: "/export/data01/databases/tigr/TIGR_Info_clean2.txt"
+  max_domain_overlap: 25 #percentage overlap allow from smallest domain
+  evalue_domain_cutoff: "1e-4" #cutoff domains with bad independent evalue
+  domain_col: 5 #the column the domain name is located at (-1)
+  database: "TIGRFAMs_15.0_HMM.LIB"
+  database_names: "TIGR_Info_clean2.txt"
   extra_params: ""
   concatenate_bins: "F"
+  database_name: "TIGR: TIGRFAM"
+  database_version: "2018-06-19"
+  database_description: "TIGRFAMs is a collection of curated multiple sequence alignments (seed alignments) for protein families and profile Hidden Markov Models (HMMs) built from the seeds with the HMMER package."
   
 cazy_hmmr:
-  annotate: "T"
+  annotate: "F"
+  hmmr_tool: "hmmsearch" #hmmsearch or hmmscan
   cpus: 10
   evalue: 1e-5
-  hmmr_database: "/export/data01/databases/cazy/dbCAN-HMMdb-V9.txt" #"/export/data01/databases/cazy_spt/dbCAN-HMMdb-V7.txt"
-  database_names: "/export/data01/databases/cazy/CAZyDB.07302020.fam-activities.txt" #"/export/data01/databases/cazy_spt/CAZY_mapping_2.txt"
+  max_domain_overlap: 25 #percentage overlap allow from smallest domain
+  evalue_domain_cutoff: "1e-4" #cutoff domains with bad independent evalue
+  domain_col: 4 #the column the domain name is located at (-1)
+  database: "dbCAN-HMMdb-V12.txt" #"/export/data01/databases/cazy/dbCAN-HMMdb-V9.txt"
+  database_names: "CAZyDB.08062022.fam-activities.txt" #"/export/data01/databases/cazy/CAZyDB.07302020.fam-activities.txt"
   extra_params: ""
   concatenate_bins: "F"
+  database_name: "CAZy: Carbohydrate-Active enzymes"
+  database_version: "2022-06-08"
+  database_description: "Database contains a classification and associated information about enzymes involved in the synthesis, metabolism, and recognition of complex carbohydrates, i.e. disaccharides, oligosaccharides, polysaccharides, and glycoconjugates."
 
 merops_blast:
-  annotate: "T"
+  annotate: "F"
   threads: 10
   evalue: 1e-20
-  blast_database: "/export/data01/databases/merops/merops_protease"
-  database_names: "/export/data01/databases/merops/protease_description.txt"
+  database: "merops_protease"
+  database_names: "protease_description.txt"
   extra_params: ""
   concatenate_bins: "F"
+  database_name: "MEROPS"
+  database_version: "2023-01-19"
+  database_description: "This database is an information resource for peptidases (also termed proteases, proteinases and proteolytic enzymes) and the proteins that inhibit them."
 
 transporterDB_blast:
-  annotate: "T"
+  annotate: "F"
   threads: 10
   evalue: 1e-20
-  blast_database: "/export/data01/databases/tcdb/tcdb"#"/export/data01/databases/tcdb/TransporterDB/tcdb_renamed_short"
-  database_names: "/export/data01/databases/tcdb/tcdb_definition.tsv"#"/export/data01/databases/tcdb/TransporterDB/TCDB_Desc_final.txt"
+  database: "tcdb"
+  database_names: "tcdb_definition.tsv"
   extra_params: ""
   concatenate_bins: "F"
-  
-hydDB_blast:
-  annotate: "T"
-  threads: 10
-  evalue: 1e-20
-  blast_database: "/export/data01/databases/HydDB/HydDB_uniq"
-  database_names: "/export/data01/databases/HydDB/HydDB_mapping"
-  extra_params: ""
-  concatenate_bins: "F"
+  database_name: "TCDB: Transporter Classification database"
+  database_version: "2024-03-12"
+  database_description: "The database details a classification system for membrane transport proteins known as the Transporter Classification (TC) system."
 
+hydDB_blast:
+  annotate: "F"
+  threads: 10
+  evalue: 1e-20
+  database: "HydDB_uniq"
+  database_names: "HydDB_mapping"
+  extra_params: ""
+  concatenate_bins: "F"
+  database_name: "HydDB: Hydrogenase Database"
+  database_version: "2018"
+  database_description: "Database for classification of hydrogenase sequences and contains curated hydrogenases by known type."
+
+signalP:
+  annotate: "F"
+  cpus: 10
+  organism: "other" #{eukarya,other,euk} The organism group of origin of the sequences. `eukarya`, `euk` limit predictions to Sec/SPI.
+  extra_params: " --format none " #def values: --mode fast; --bsize 10
+  concatenate_bins: "F"
+  database_name: "SignalP"
+  database_version: "2021 6.0"
+  database_description: "Signal peptide prediction tool."
+
+#
+# Custom database entries
+#
+db1_hmmr:
+  annotate: "F" 
+  hmmr_tool: "hmmsearch" #hmmsearch or hmmscan
+  database_name: "" #unique name for files
+  database_version: ""
+  database_description: ""
+  cpus: 10
+  evalue: "1e-5" 
+  max_domain_overlap: 25 #percentage overlap allow from smallest domain
+  evalue_domain_cutoff: "1e-4" #cutoff domains with bad independent evalue
+  domain_col: 4 #the column the domain name is located at (-1)
+  database: "" #database location with domain entries
+  database_names: "" #extra domain information
+  extra_params: "" 
+  concatenate_bins: "T" 
+
+db2_hmmr:
+  annotate: "F" 
+  hmmr_tool: "hmmsearch" #hmmsearch or hmmscan
+  database_name: "" #unique name for files
+  database_version: ""
+  database_description: ""
+  cpus: 10
+  evalue: "1e-5" 
+  max_domain_overlap: 25 #percentage overlap allow from smallest domain
+  evalue_domain_cutoff: "1e-4" #cutoff domains with bad independent evalue
+  domain_col: 4 #the column the domain name is located at (-1)
+  database: "" #database location with domain entries
+  database_names: "" #extra domain information
+  extra_params: "" 
+  concatenate_bins: "T" 
+
+db1_blast:
+  annotate: "F" 
+  database_name: "" #unique name for files
+  database_version: ""
+  database_description: ""
+  threads: 10
+  evalue: "1e-20" 
+  database: "" #database location with protein entries
+  database_names: "" #extra protein information
+  extra_params: "" 
+  concatenate_bins: "T" 
+
+db2_blast:
+  annotate: "F" 
+  database_name: "" #unique name for files
+  database_version: ""
+  database_description: ""
+  threads: 10
+  evalue: "1e-20" 
+  database: "" #database location with protein entries
+  database_names: "" #extra protein information
+  extra_params: "" 
+  concatenate_bins: "T"

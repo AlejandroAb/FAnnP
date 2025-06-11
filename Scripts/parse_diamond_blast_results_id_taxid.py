@@ -106,27 +106,27 @@ last 5 columns optional and only printed in case of input3 is true (i.e. if file
 
 def Parse_final_table1(genes, Blast_all_dic):
 	for geneID in genes:
-		if geneID in Blast_all_dic:
-			Blast_all = Blast_all_dic[geneID]
+		if geneID.split("\t")[0] in Blast_all_dic:
+			Blast_all = Blast_all_dic[geneID.split("\t")[0]]
 		else:
 			Blast_all = "-\t-\t-\t-\t-\t-"
 
-		outfile.write("%s\t%s\n" % (geneID, Blast_all))
+		outfile.write("%s\t%s\n" % (geneID.split("\t")[0], Blast_all))
 
 
 def Parse_final_table2(genes, Blast_all_dic, Blast_sel_dic):
 	for geneID in genes:
-		if geneID in Blast_all_dic:
-			Blast_all = Blast_all_dic[geneID]
+		if geneID.split("\t")[0] in Blast_all_dic:
+			Blast_all = Blast_all_dic[geneID.split("\t")[0]]
 		else:
 			Blast_all = "-\t-\t-\t-\t-\t-"
 
-		if geneID in Blast_sel_dic:
-			Blast_sel = Blast_sel_dic[geneID]
+		if geneID.split("\t")[0] in Blast_sel_dic:
+			Blast_sel = Blast_sel_dic[geneID.split("\t")[0]]
 		else:
 			Blast_sel = "-\t-\t-\t-\t-\t-"
 
-		outfile.write("%s\t%s\t%s\n" % (geneID, Blast_all, Blast_sel))
+		outfile.write("%s\t%s\t%s\n" % (geneID.split("\t")[0], Blast_all, Blast_sel))
 
 
 

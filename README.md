@@ -1,7 +1,7 @@
 # FAnnP
 Functional Annotation Pipeline
 
-**Current version:** 1.1
+**Current version:** 2.0
 
 The functional annotation pipeline is mainly designed for the annotation of prokaryotic MAGs (Metagenome Assembled Genomes), although it can also be used for functional annotation of any other type of assembly (genomic or metagenomic).
 
@@ -33,8 +33,8 @@ Input files and Run name
 First, enter the name of your RUN, then the FULL path to your directory containing the bins to annotate, and the bin extension.
 
 ```yaml
-RUN: "test_run1" 
-bin_dir: "/export/lv3/scratch/projects_XX/MyBins/" 
+RUN: "/output/directory" 
+bin_dir: "/bin/directory/" 
 bin_list: ["bin1","bin2","bin3","bin4",...,"binN"]
 bin_ext: "fna" 
 ```
@@ -43,17 +43,72 @@ Sometimes the bin_list can contain several bins to be annotated, in this sense, 
 
 `Scripts/list_Bins.sh test_dir/ fasta config.yaml config_new.yaml`
 
+## Set up the database
+Once that you have installed MySQL, execute the following script.
+
+> bash /export/lv10/user/ttensen/work_dir/Database_scripts/create_and_insert_fannp.sh "mysql_username" "mysql_password" "fannp" "True" "mysql_loadmap" 
+
+| Argument Position | Input Options | Argument Explanation |
+| $1 | mysql username | MySQL username, required to create a database. |
+| $2 | mysql password | MySQL password, required to create a database. |
+| $3 | database name | Make sure your new database name doesn't contain spaces. |
+| $4 | *True* or *False* | To create the database if it doesn't already exist. |
+| $5 | mysql loadmap | The map that allows data to be loaded into MySQL. |
+| $6 (Optional) | --reload_databases | Reloads the KEGG, COG and Pfam database tables. |
+| $7 (Optional) | --skip_kegg | Requires --reload_databases to be activated to function, to safe time on reloading the database since KEGG will take a while. |
+
+## Import FAnnP environment
+Import conda environment and activate it:
+
+`conda env create -n fannp_v2.0 -f fannp_v2.0.yaml`
+`conda activate fannp_v2.0`
+`pip install mysql-connector-python`
+
 ## Run the pipeline
 Once that you have all the files in place and your configuration file done:
 
-`snakemake --configfile config.yaml`
+`snakemake --configfile config.yaml --cores 15`
+
+*Database Storage*
+
+Wether you want to store the annotations or not can be turned on and off.
+To store our annotations in the FAnnP database we will need to make sure
+the name of this config file name is the same as the one in the variable.
+The MySQL username and password will be used to store the annotations.
+The MySQL host should be 'localhost' when run on ada
+and should be 'ada' when run on the HPC.
+The name of the database can be changed.
+The map where you can load data from files can be configured through MySQL.
+The Meta-Cascabel files both need to be supplied and then afterwards run
+can be set to 'T' to store information from Meta-Cascabel to bin/contigs.
+A Metadata file can also be supplied which requires a certain format. 
+
+```yaml
+generate_sql_database: "T" 
+mysql_username: "faanp_user" 
+mysql_password: "FaanP2025!" 
+mysql_host: "localhost"
+mysql_database: "fannp" 
+mysql_loadmap: "/MySQL/loadfile/map/" 
+
+# If you ran meta_cascabel and where its output locations are.
+meta_cascabel: 
+  run: "F" 
+  location_final_bins: ""  # e.g. map/FinalBins.summary.tsv
+  contig_coverage: ""  # e.g. map/contig_coverage.txt
+
+# If you have a bin metadata file available.
+meta_data:
+  run: "F" 
+  bin_meta_data: ""  # e.g. map/metadata_example.tsv
+```
 
 *Gene calling*
 
-You can choose between Prokka and Prodigal. We recommend the first one for small to medium datasets; Prodigal for bigger datasets.
+You can choose between Prodigal or skipping gene calling if you have a file with proteins. 
 
 ```yaml
-GENE_CALLING: "PROKKA" #PRODIGAL OR PROKKA
+GENE_CALLING: "PRODIGAL" #PRODIGAL OR SKIP
 
 prodigal:
  procedure: "meta" #Select procedure (single or meta)
@@ -103,42 +158,62 @@ bin_cleaning:
 
 The name of the following sections/options is equivalent to the name of the databases or feature to be annotated. In general, the name is followed by the tool that is used for making such annotation (diamond, blast, hmmr). Set the option annotate: "T" or "F" in order to turn on / off such database annotation. The concatenate_bins flag if set to "T" it will perform the annotation for all the proteins from all the bins/genomes at once (concatenating all of them in a single file); otherwise, it will perform this operation individually for all the bins/genomes. This last scenario is more useful when you have a lot of computational power, so then, you can parallelize more jobs, each one with its own number of CPUs.
 
-
 ## Run the pipeline
 Once that you have all the files in place and your configuration file done:
 
-`snakemake --configfile config.yaml`
+`snakemake --configfile config.yaml --cores 15`
 
 ## Output files structure
 
 ```
 {RUN}
-├── FunctionalAnnotation.tsv   Summary file with the annotations by protein
-├── clean_bins                 Directory with bins after cleaning steps
+├── FunctionalAnnotation.tsv      Summary file with the annotations by protein
+├── clean_bins                    Directory with bins after cleaning steps
 │   ├── clean.log
 │   ├── clean_bin1.fna
 ...  ...
     └── clean_binN.fna
-├── prokka                       Directory with protein predictions
+├── gene_calling                  Directory with protein predictions
 │   ├── All_bins_clean.faa
 │   ├── concatenate_bins.benchmark
 │   ├── prodigal.benchmark
 │   ├── renamed
 │   ├── bin_1                     Directory with protein predictions per bin
 │   └── bin_2
-├── arCOG                        Results per database
-│   └── arcogs_map.tsv
-├── cog_diamond
-│   └── cog_map.tsv
 ├── contig_mapping
 │   └── Mapping files
-├── diamond
+├── NCBI NR                       Results per database
 │   └──  diamond_map.tsv
-├── kfam
+├── KO
 │   └── kfam_map.tsv
-├── pfam
+├── arCOG
+│   └── arcogs_map.tsv
+├── COG
+│   └── cogs_map.tsv
+├── Pfam
 │   └── pfam_map.tsv
+├── SignalP
+│   └── signalP_map.tsv
+├── TIGR / CAZy / MEROPS / TransporterDB / hydDB / customDBs
+│   ├── tigr_map.tsv
+│   ├── cazy_map.tsv
+│   ├── merops_map.tsv
+│   ├── transporter_map.tsv
+│   └── hydDB_map.tsv
 ....
-└── <DB>
-    └── <DB>_map.tsv
+├── all_sql_inserts
+│   └── run_to_sql.txt
+└── generate_marimo_notebook
+    └── run_to_notebook.txt
 ```
+
+## Import Marimo environment
+Import conda environment and activate it:
+
+`conda env create -n marimo_python_env -f marimo_python_env.yaml`
+`conda activate marimo_python_env`
+
+## Activate Marimo Notebook
+Open the Marimo Notebook which is created in the directory the pipeline has been activated in:
+
+`marimo edit`
